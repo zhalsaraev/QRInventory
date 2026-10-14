@@ -14,17 +14,21 @@ android {
         minSdk = 29
         targetSdk = 37
         versionCode = 5
-        versionName = "0.5.0"
+        versionName = "0.5.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            optimization {
-                enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
-            }
+            // ОТКЛЮЧАЕМ СЖАТИЕ: Это уберет вылеты из-за оптимизации нативных библиотек Google и CameraX
+            isMinifyEnabled = false
+            isShrinkResources = false
+
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     compileOptions {
