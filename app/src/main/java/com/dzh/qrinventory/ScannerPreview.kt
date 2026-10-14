@@ -1,5 +1,6 @@
 package com.dzh.qrinventory
 
+
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.view.ViewGroup
@@ -19,6 +20,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -62,15 +64,12 @@ private fun scanBarcode(
         return
     }
 
-    // Вместо сырого кадра конвертируем ImageProxy в Bitmap для возможности обрезки
     val rotationDegrees = imageProxy.imageInfo.rotationDegrees
     val bitmap = imageProxy.toBitmap()
 
-    // Поворачиваем Bitmap в соответствии с ориентацией камеры устройства
     val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
     val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 
-    // ВЫРЕЗАЕМ ЦЕНТР: Сканируем только центральный квадрат 60% от ширины экрана
     val size = (rotatedBitmap.width * 0.6f).toInt()
     val x = (rotatedBitmap.width - size) / 2
     val y = (rotatedBitmap.height - size) / 2
@@ -95,7 +94,6 @@ private fun scanBarcode(
         imageProxy.close()
     }
 }
-
 @Composable
 fun ScannerPreview(
     modifier: Modifier = Modifier,
@@ -108,9 +106,11 @@ fun ScannerPreview(
 
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
+
+    // ИНИЦИАЛИЗАЦИЯ СКАНЕРА: Включаем поддержку ВСЕХ существующих форматов кодов
     val barcodeScanner = remember {
         val options = BarcodeScannerOptions.Builder()
-            .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+            .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS) // Ищет и QR, и обычные штрихкоды (EAN, Code 128)
             .build()
         BarcodeScanning.getClient(options)
     }
@@ -166,7 +166,6 @@ fun ScannerPreview(
             }
         }
     ) {
-        // Вычисляем размер рамки прицела (60% от ширины экрана)
         val boxWidth = maxWidth * 0.6f
 
         AndroidView(
@@ -186,13 +185,12 @@ fun ScannerPreview(
             }
         )
 
-        // ГРАФИЧЕСКИЙ ПРИЦЕЛ: Стильная рамка по центру экрана
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
                 .size(boxWidth)
                 .border(BorderStroke(2.dp, Color(0xFF33BBEE)), shape = RoundedCornerShape(12.dp))
-                .background(Color(0x1A000000), shape = RoundedCornerShape(12.dp)) // Слегка затеняем внутреннюю область
+                .background(Color(0x1A000000), shape = RoundedCornerShape(12.dp))
         )
 
         IconButton(
@@ -208,7 +206,7 @@ fun ScannerPreview(
                 .size(48.dp)
         ) {
             Icon(
-                imageVector = if (torchOn) Icons.Filled.FlashOn else Icons.Filled.FlashOff,
+                imageVector = Icons.Filled.FlashOn,
                 contentDescription = "Фонарик",
                 modifier = Modifier.size(24.dp)
             )

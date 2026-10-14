@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.dzh.qrinventory.ui.theme.QRInventoryTheme
+import com.dzh.qrinventory.ScannerPreview
 import java.io.File
 
 class MainActivity : ComponentActivity() {
