@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<paths>
-    <external-files-path name="inventory" path="." />
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Разрешаем системе делиться файлами из публичной папки документов -->
+    <external-path name="external_files" path="." />
 </paths>

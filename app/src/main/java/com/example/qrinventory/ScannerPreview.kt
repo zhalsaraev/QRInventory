@@ -1,19 +1,35 @@
 package com.example.qrinventory
 
+import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.view.ViewGroup
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FlashOff
+import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -24,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -40,20 +57,46 @@ private fun scanBarcode(
     scanner: com.google.mlkit.vision.barcode.BarcodeScanner,
     onScan: (String) -> Unit
 ) {
-    val mediaImage = imageProxy.image ?: return
-    val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-    scanner.process(image)
-        .addOnSuccessListener { barcodes ->
-            barcodes.firstOrNull()?.rawValue?.let { onScan(it) }
-        }
-        .addOnCompleteListener { imageProxy.close() }
+    val mediaImage = imageProxy.image
+    if (mediaImage == null) {
+        imageProxy.close()
+        return
+    }
+
+    // Вместо сырого кадра конвертируем ImageProxy в Bitmap для возможности обрезки
+    val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+    val bitmap = imageProxy.toBitmap()
+
+    // Поворачиваем Bitmap в соответствии с ориентацией камеры устройства
+    val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+    val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+
+    // ВЫРЕЗАЕМ ЦЕНТР: Сканируем только центральный квадрат 60% от ширины экрана
+    val size = (rotatedBitmap.width * 0.6f).toInt()
+    val x = (rotatedBitmap.width - size) / 2
+    val y = (rotatedBitmap.height - size) / 2
+
+    if (size > 0 && x >= 0 && y >= 0 && x + size <= rotatedBitmap.width && y + size <= rotatedBitmap.height) {
+        val croppedBitmap = Bitmap.createBitmap(rotatedBitmap, x, y, size, size)
+        val image = InputImage.fromBitmap(croppedBitmap, 0)
+
+        scanner.process(image)
+            .addOnSuccessListener { barcodes ->
+                barcodes.firstOrNull()?.rawValue?.let { onScan(it) }
+            }
+            .addOnCompleteListener {
+                croppedBitmap.recycle()
+                rotatedBitmap.recycle()
+                bitmap.recycle()
+                imageProxy.close()
+            }
+    } else {
+        rotatedBitmap.recycle()
+        bitmap.recycle()
+        imageProxy.close()
+    }
 }
 
-/**
- * Верхняя половина: превью камеры (PreviewView) + кнопка подсветки.
- * Анализ QR-кодов — MLKit Barcode Scanning.
- */
-@OptIn(ExperimentalGetImage::class)
 @Composable
 fun ScannerPreview(
     modifier: Modifier = Modifier,
@@ -65,17 +108,14 @@ fun ScannerPreview(
     val lifecycleOwner = context as LifecycleOwner
 
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
-
-    // Инициализируем Executor и Scanner
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
     val barcodeScanner = remember {
         val options = BarcodeScannerOptions.Builder()
-            .setBarcodeFormats(Barcode.FORMAT_QR_CODE) // Ищем только QR-коды для производительности
+            .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
             .build()
         BarcodeScanning.getClient(options)
     }
 
-    // Правильно закрываем ресурсы при уходе с экрана, чтобы избежать утечек памяти
     DisposableEffect(Unit) {
         onDispose {
             barcodeScanner.close()
@@ -100,22 +140,11 @@ fun ScannerPreview(
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
 
     LaunchedEffect(cameraProviderFuture) {
-        val provider = try {
-            cameraProviderFuture.get()
-        } catch (e: Exception) {
-            null
-        } ?: return@LaunchedEffect
+        val provider = try { cameraProviderFuture.get() } catch (e: Exception) { null } ?: return@LaunchedEffect
         val cam = try {
-            provider.unbindAll() // На всякий случай отвязываем старые сессии камеры
-            provider.bindToLifecycle(
-                lifecycleOwner,
-                CameraSelector.DEFAULT_BACK_CAMERA,
-                preview,
-                imageAnalysis
-            )
-        } catch (e: Exception) {
-            null
-        }
+            provider.unbindAll()
+            provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageAnalysis)
+        } catch (e: Exception) { null }
         camera = cam
         previewView?.let { preview.setSurfaceProvider(it.surfaceProvider) }
     }
@@ -124,16 +153,31 @@ fun ScannerPreview(
         camera?.cameraControl?.enableTorch(torchOn)
     }
 
-    Box(modifier = modifier) {
+    BoxWithConstraints(
+        modifier = modifier.pointerInput(camera, previewView) {
+            detectTapGestures { tapOffset ->
+                val camControl = camera?.cameraControl ?: return@detectTapGestures
+                val pView = previewView ?: return@detectTapGestures
+                val factory = pView.meteringPointFactory
+                val point = factory.createPoint(tapOffset.x, tapOffset.y)
+                val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
+                    .setAutoCancelDuration(4, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+                camControl.startFocusAndMetering(action)
+            }
+        }
+    ) {
+        // Вычисляем размер рамки прицела (60% от ширины экрана)
+        val boxWidth = maxWidth * 0.6f
+
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 PreviewView(ctx).apply {
-                    layoutParams =
-                        ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
                     scaleType = PreviewView.ScaleType.FILL_CENTER
                 }
             },
@@ -143,15 +187,32 @@ fun ScannerPreview(
             }
         )
 
-        FloatingActionButton(
+        // ГРАФИЧЕСКИЙ ПРИЦЕЛ: Стильная рамка по центру экрана
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(boxWidth)
+                .border(BorderStroke(2.dp, Color(0xFF33BBEE)), shape = RoundedCornerShape(12.dp))
+                .background(Color(0x1A000000), shape = RoundedCornerShape(12.dp)) // Слегка затеняем внутреннюю область
+        )
+
+        IconButton(
             onClick = { onTorchToggle(!torchOn) },
-            containerColor = if (torchOn) Color(0xFF33BBEE) else Color(0x99000000),
-            contentColor = Color.White,
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = Color(0x66000000),
+                contentColor = if (torchOn) Color(0xFF33BBEE) else Color.White
+            ),
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(12.dp)
+                .statusBarsPadding()
+                .padding(16.dp)
+                .size(48.dp)
         ) {
-            Text(if (torchOn) "💡 Вкл" else "💡 Выкл")
+            Icon(
+                imageVector = if (torchOn) Icons.Filled.FlashOn else Icons.Filled.FlashOff,
+                contentDescription = "Фонарик",
+                modifier = Modifier.size(24.dp)
+            )
         }
     }
 }
