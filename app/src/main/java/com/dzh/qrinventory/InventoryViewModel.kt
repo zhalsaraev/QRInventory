@@ -170,7 +170,6 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /** НОВЫЙ МЕТОД: Полная очистка папки от всех ведомостей */
     fun deleteAllFiles() {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
@@ -182,7 +181,6 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                 }
             }
-            // Сбрасываем текущее окно и создаем чистый рабочий лист
             _state.value = UiState()
             _state.updateMessage("Все сохраненные ведомости удалены")
             createNew()
@@ -231,10 +229,12 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         value = value.copy(message = msg)
     }
 
+    /** ИСПРАВЛЕНО ПОД GOOGLE PIXEL: Перевели сигнал на STREAM_MUSIC (Мультимедиа) */
     private fun beep() {
         try {
-            val tg = tone ?: ToneGenerator(AudioManager.STREAM_NOTIFICATION, ToneGenerator.MAX_VOLUME).also { tone = it }
-            tg.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
+            // Переключение на STREAM_MUSIC заставляет Pixel проигрывать звук через общий медиа-канал
+            val tg = tone ?: ToneGenerator(AudioManager.STREAM_MUSIC, 85).also { tone = it }
+            tg.startTone(ToneGenerator.TONE_PROP_BEEP, 120) // Компактный, четкий сигнал успешного сканирования
         } catch (_: Exception) {}
     }
 
