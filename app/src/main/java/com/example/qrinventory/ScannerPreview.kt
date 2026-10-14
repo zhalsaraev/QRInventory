@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,12 +29,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.LifecycleOwner
 import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
-private fun scanBarcode(imageProxy: ImageProxy, scanner: com.google.mlkit.vision.barcode.BarcodeScanner, onScan: (String) -> Unit) {
-    @androidx.annotation.OptIn(ExperimentalGetImage::class)
+private fun scanBarcode(
+    imageProxy: ImageProxy,
+    scanner: com.google.mlkit.vision.barcode.BarcodeScanner,
+    onScan: (String) -> Unit
+) {
     val mediaImage = imageProxy.image ?: return
     val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
     scanner.process(image)
@@ -45,7 +51,7 @@ private fun scanBarcode(imageProxy: ImageProxy, scanner: com.google.mlkit.vision
 
 /**
  * Верхняя половина: превью камеры (PreviewView) + кнопка подсветки.
- * Анализ QR/штрих-кодов — MLKit Barcode Scanning.
+ * Анализ QR-кодов — MLKit Barcode Scanning.
  */
 @OptIn(ExperimentalGetImage::class)
 @Composable
@@ -59,8 +65,23 @@ fun ScannerPreview(
     val lifecycleOwner = context as LifecycleOwner
 
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+
+    // Инициализируем Executor и Scanner
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
-    val barcodeScanner = remember { BarcodeScanning.getClient() }
+    val barcodeScanner = remember {
+        val options = BarcodeScannerOptions.Builder()
+            .setBarcodeFormats(Barcode.FORMAT_QR_CODE) // Ищем только QR-коды для производительности
+            .build()
+        BarcodeScanning.getClient(options)
+    }
+
+    // Правильно закрываем ресурсы при уходе с экрана, чтобы избежать утечек памяти
+    DisposableEffect(Unit) {
+        onDispose {
+            barcodeScanner.close()
+            analysisExecutor.shutdown()
+        }
+    }
 
     val preview = remember { Preview.Builder().build() }
     val imageAnalysis = remember {
@@ -69,6 +90,7 @@ fun ScannerPreview(
             .setBackgroundExecutor(analysisExecutor)
             .build()
     }
+
     imageAnalysis.setAnalyzer(analysisExecutor) { imageProxy ->
         if (imageProxy == null) return@setAnalyzer
         scanBarcode(imageProxy, barcodeScanner, onScan)
@@ -84,6 +106,7 @@ fun ScannerPreview(
             null
         } ?: return@LaunchedEffect
         val cam = try {
+            provider.unbindAll() // На всякий случай отвязываем старые сессии камеры
             provider.bindToLifecycle(
                 lifecycleOwner,
                 CameraSelector.DEFAULT_BACK_CAMERA,

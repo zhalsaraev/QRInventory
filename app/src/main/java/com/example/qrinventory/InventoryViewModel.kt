@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class InventoryViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -33,13 +35,16 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
     private var lastScanAt = 0L
     private var tone: ToneGenerator? = null
 
+    // Мьютекс гарантирует, что записи в файл не наложатся друг на друга
+    private val fileWriteMutex = Mutex()
+
     private val filesDir: File
         get() = getApplication<Application>().getExternalFilesDir(null)!!
 
     fun createNew() {
         viewModelScope.launch(Dispatchers.IO) {
             val name = "inventory_" +
-                DateFormat.format("yyyy-MM-dd_HH-mm-ss", Date()) + ".tsv"
+                    DateFormat.format("yyyy-MM-dd_HH-mm-ss", Date()) + ".tsv"
             val file = File(filesDir, name)
             file.writeText("")
             _state.value = UiState(fileName = name, filePath = file.absolutePath)
@@ -63,7 +68,11 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         _state.update { it.copy(lines = it.lines + line, message = null) }
         beep()
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { File(filePath).appendText(line + "\n") }
+            runCatching {
+                fileWriteMutex.withLock {
+                    File(filePath).appendText(line + "\n")
+                }
+            }
         }
     }
 
@@ -71,7 +80,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         val path = _state.value.filePath
         if (path != null) {
             viewModelScope.launch(Dispatchers.IO) {
-                runCatching { File(path).delete() }
+                runCatching { fileWriteMutex.withLock { File(path).delete() } }
             }
         }
         lastCode = null
@@ -119,5 +128,14 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             tg.startTone(ToneGenerator.TONE_PROP_BEEP, 150)
         } catch (_: Exception) {
         }
+    }
+
+    // Освобождаем нативные аудио-ресурсы при уничтожении ViewModel
+    override fun onCleared() {
+        super.onCleared()
+        try {
+            tone?.release()
+            tone = null
+        } catch (_: Exception) {}
     }
 }
