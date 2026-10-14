@@ -4,17 +4,17 @@ plugins {
 }
 
 android {
-    namespace = "com.example.qrinventory"
+    namespace = "com.dzh.qrinventory"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.qrinventory"
+        applicationId = "com.dzh.qrinventory"
         minSdk = 29
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 5
+        versionName = "0.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -52,7 +52,6 @@ dependencies {
     implementation(libs.androidx.camera.view)
     implementation(libs.mlkit.barcode.scanning)
     testImplementation(libs.junit)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)

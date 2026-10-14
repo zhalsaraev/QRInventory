@@ -1,4 +1,4 @@
-package com.example.qrinventory.ui.theme
+package com.dzh.qrinventory.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

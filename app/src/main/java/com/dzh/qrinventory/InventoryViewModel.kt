@@ -1,4 +1,4 @@
-package com.example.qrinventory
+package com.dzh.qrinventory
 
 import android.app.Application
 import android.content.Intent

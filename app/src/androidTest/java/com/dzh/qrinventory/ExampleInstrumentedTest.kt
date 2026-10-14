@@ -1,4 +1,4 @@
-package com.example.qrinventory
+package com.dzh.qrinventory
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4

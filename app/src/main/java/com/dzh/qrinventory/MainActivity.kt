@@ -1,4 +1,4 @@
-package com.example.qrinventory
+package com.dzh.qrinventory
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -55,7 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.example.qrinventory.ui.theme.QRInventoryTheme
+import com.dzh.qrinventory.ui.theme.QRInventoryTheme
 import java.io.File
 
 class MainActivity : ComponentActivity() {

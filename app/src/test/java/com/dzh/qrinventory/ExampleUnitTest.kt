@@ -1,4 +1,4 @@
-package com.example.qrinventory
+package com.dzh.qrinventory
 
 import org.junit.Test
 
