@@ -108,9 +108,16 @@ fun ScannerPreview(
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
 
     // ИНИЦИАЛИЗАЦИЯ СКАНЕРА: Включаем поддержку ВСЕХ существующих форматов кодов
+    // ИНИЦИАЛИЗАЦИЯ СКАНЕРА: Жестко ограничиваем форматы, чтобы убрать галлюцинации
     val barcodeScanner = remember {
         val options = BarcodeScannerOptions.Builder()
-            .setBarcodeFormats(Barcode.FORMAT_ALL_FORMATS) // Ищет и QR, и обычные штрихкоды (EAN, Code 128)
+            .setBarcodeFormats(
+                Barcode.FORMAT_QR_CODE,     // Для ваших двумерных наклеек Aquarius/Infinix
+                Barcode.FORMAT_EAN_13,      // Стандартный штрихкод на коробках гаджетов
+                Barcode.FORMAT_EAN_8,       // Компактный штрихкод
+                Barcode.FORMAT_CODE_128,    // Длинные серийные штрихкоды с буквами
+                Barcode.FORMAT_CODE_39      // Стандартные заводские штрихкоды техники
+            )
             .build()
         BarcodeScanning.getClient(options)
     }

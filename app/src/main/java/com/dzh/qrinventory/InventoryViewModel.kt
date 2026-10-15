@@ -81,20 +81,44 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             _state.updateMessage("Создана ведомость: $name")
         }
     }
+    private val scanHistoryMap = mutableMapOf<String, Long>()
+
     fun onScan(raw: String) {
         val code = raw.trim()
         if (code.isEmpty()) return
 
-        val codeExists = _state.value.lines.any { it.startsWith("$code\t") }
-        if (codeExists) return
-
         val now = System.currentTimeMillis()
-        val stamp = DateFormat.format("yyyy-MM-dd HH:mm:ss", Date(now))
-        val line = "$code\t$stamp"
+        scanHistoryMap.entries.removeIf { now - it.value > 3000L }
+
+        if (scanHistoryMap.containsKey(code)) return
+        scanHistoryMap[code] = now
+
+        // Извлекаем первый токен из кода для проверки на дубликаты
+        val incomingSubParts = code.split("\t", "\n", "\r").map { it.trim() }.filter { it.isNotEmpty() }
+        val incomingInventoryNum = incomingSubParts.getOrNull(0) ?: ""
+
+        val codeExists = _state.value.lines.any { line ->
+            val tokens = line.split("\t").map { it.trim() }
+            // В новой структуре считанный код НАЧИНАЕТСЯ с 3-го элемента (индекс 2)
+            if (tokens.size >= 3) {
+                val existingInventoryNum = tokens[2]
+                existingInventoryNum == incomingInventoryNum
+            } else false
+        }
+
+        if (codeExists) {
+            beep(isError = true)
+            _state.updateMessage("⚠️ Код $incomingInventoryNum уже есть в ведомости!")
+            return
+        }
+
+        val stamp = DateFormat.format("yyyy-MM-dd HH:mm:ss", Date(now)).toString()
+        // Структура строки при создании: Время \t [ПустойКоммент] \t СчитанныеДанныеQR
+        val line = "$stamp\t\t$code"
         val filePath = _state.value.filePath ?: return
 
         _state.update { it.copy(lines = it.lines + line, message = null) }
-        beep()
+        beep(isError = false)
 
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
@@ -103,13 +127,45 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /**
+     * Изменено: Комментарий всегда вставляется строго во второе поле (индекс 1)
+     */
+    fun addCommentToLine(index: Int, comment: String) {
+        val filePath = _state.value.filePath ?: return
+        val currentLines = _state.value.lines.toMutableList()
+        val targetLine = currentLines.getOrNull(index) ?: return
+
+        val tokens = targetLine.split("\t").map { it.trim() }
+        if (tokens.size < 3) return
+
+        val stamp = tokens[0]
+        val cleanedComment = comment.trim().replace("\n", " ").replace("\t", " ")
+
+        // Забираем всё, что шло после поля комментария (начиная со 2-го индекса)
+        val qrDataAndRemainder = tokens.subList(2, tokens.size).joinToString("\t")
+
+        // Пересобираем: Время \t Комментарий \t Данные_С_Кода
+        val newLine = "$stamp\t$cleanedComment\t$qrDataAndRemainder"
+
+        currentLines[index] = newLine
+        _state.update { it.copy(lines = currentLines) }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                fileWriteMutex.withLock {
+                    val file = File(filePath)
+                    file.writeText(currentLines.joinToString("\n") + "\n")
+                }
+            }
+            _state.updateMessage("Комментарий сохранен")
+        }
+    }
+
     fun renameCurrentFile(newCustomName: String) {
         val currentPath = _state.value.filePath ?: return
         var cleanedName = newCustomName.trim()
         if (cleanedName.isEmpty()) return
-        if (!cleanedName.endsWith(".tsv", ignoreCase = true)) {
-            cleanedName += ".tsv"
-        }
+        if (!cleanedName.endsWith(".tsv", ignoreCase = true)) cleanedName += ".tsv"
 
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
@@ -118,9 +174,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                     val newFile = File(filesDir, cleanedName)
                     if (oldFile.exists() && !newFile.exists()) {
                         if (oldFile.renameTo(newFile)) {
-                            _state.update {
-                                it.copy(fileName = cleanedName, filePath = newFile.absolutePath)
-                            }
+                            _state.update { it.copy(fileName = cleanedName, filePath = newFile.absolutePath) }
                             _state.updateMessage("Переименовано в: $cleanedName")
                         }
                     } else if (newFile.exists()) {
@@ -144,7 +198,6 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-
         val chooserIntent = Intent.createChooser(intent, "Отправить ведомость...").apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
@@ -157,9 +210,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun deleteFile(file: File) {
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching {
-                fileWriteMutex.withLock { if (file.exists()) file.delete() }
-            }
+            runCatching { fileWriteMutex.withLock { if (file.exists()) file.delete() } }
             if (_state.value.filePath == file.absolutePath) {
                 _state.value = UiState()
                 _state.updateMessage("Текущая ведомость удалена")
@@ -174,11 +225,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 fileWriteMutex.withLock {
-                    filesDir.listFiles()?.forEach { file ->
-                        if (file.name.endsWith(".tsv")) {
-                            file.delete()
-                        }
-                    }
+                    filesDir.listFiles()?.forEach { if (it.name.endsWith(".tsv")) it.delete() }
                 }
             }
             _state.value = UiState()
@@ -192,14 +239,8 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             val text = try {
                 getApplication<Application>().contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() }
             } catch (e: Exception) { null } ?: return@launch
-
             val lines = text.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
-
-            var name = if (uri.scheme == "file") {
-                File(uri.path ?: "").name
-            } else {
-                "file.tsv"
-            }
+            var name = if (uri.scheme == "file") File(uri.path ?: "").name else "file.tsv"
 
             if (uri.scheme == "content") {
                 runCatching {
@@ -211,12 +252,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             val matchedFile = File(filesDir, name)
-            _state.value = UiState(
-                fileName = name,
-                lines = lines,
-                filePath = matchedFile.absolutePath,
-                sourceUri = uri
-            )
+            _state.value = UiState(fileName = name, lines = lines, filePath = matchedFile.absolutePath, sourceUri = uri)
             _state.updateMessage("Загружена ведомость: $name")
         }
     }
@@ -229,17 +265,14 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         value = value.copy(message = msg)
     }
 
-    /** ИСПРАВЛЕНО ПОД GOOGLE PIXEL: Перевели сигнал на STREAM_MUSIC (Мультимедиа) */
-    private fun beep() {
+    private fun beep(isError: Boolean = false) {
         try {
-            // Переключение на STREAM_MUSIC заставляет Pixel проигрывать звук через общий медиа-канал
             val tg = tone ?: ToneGenerator(AudioManager.STREAM_MUSIC, 85).also { tone = it }
-            tg.startTone(ToneGenerator.TONE_PROP_BEEP, 120) // Компактный, четкий сигнал успешного сканирования
+            if (isError) tg.startTone(ToneGenerator.TONE_CDMA_DIAL_TONE_LITE, 350) else tg.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
         } catch (_: Exception) {}
     }
 
     override fun onCleared() {
-        super.onCleared()
         runCatching { tone?.release(); tone = null }
     }
 }

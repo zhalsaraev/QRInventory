@@ -9,8 +9,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -56,7 +59,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.dzh.qrinventory.ui.theme.QRInventoryTheme
-import com.dzh.qrinventory.ScannerPreview
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -73,7 +75,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(viewModel: InventoryViewModel) {
     val context = LocalContext.current
@@ -97,6 +99,11 @@ fun MainScreen(viewModel: InventoryViewModel) {
     var showOpenFileDialog by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var showDeleteAllDialog by remember { mutableStateOf(false) }
+
+    var showCommentDialog by remember { mutableStateOf(false) }
+    var selectedLineIndex by remember { mutableStateOf(-1) }
+    var commentInput by remember { mutableStateOf("") }
+
     var fileToDelete by remember { mutableStateOf<File?>(null) }
     var newFileNameInput by remember { mutableStateOf("") }
 
@@ -106,6 +113,7 @@ fun MainScreen(viewModel: InventoryViewModel) {
             viewModel.clearMessage()
         }
     }
+
     // ДИАЛОГ СОЗДАНИЯ
     if (showCreateDialog) {
         AlertDialog(
@@ -145,7 +153,6 @@ fun MainScreen(viewModel: InventoryViewModel) {
             }
         )
     }
-
     // ДИАЛОГ ПЕРЕИМЕНОВАНИЯ ПО КЛИКУ НА ЗАГОЛОВОК
     if (showRenameDialog) {
         AlertDialog(
@@ -179,7 +186,36 @@ fun MainScreen(viewModel: InventoryViewModel) {
         )
     }
 
-    // ВНУТРЕННИЙ ПРОВОДНИК ФАЙЛОВ С МАКСИМАЛЬНЫМ РАЗНЕСЕНИЕМ КНОПОК
+    // ЛАКОНИЧНЫЙ ДИАЛОГ КОММЕНТАРИЯ
+    if (showCommentDialog) {
+        AlertDialog(
+            onDismissRequest = { showCommentDialog = false },
+            title = { Text(text = "Добавить комментарий", fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = commentInput,
+                    onValueChange = { commentInput = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCommentDialog = false
+                        viewModel.addCommentToLine(selectedLineIndex, commentInput)
+                    }
+                ) {
+                    Text("Сохранить", color = Color(0xFF33BBEE), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCommentDialog = false }) { Text("Отмена", color = Color.Gray) }
+            }
+        )
+    }
+
+    // ВНУТРЕННИЙ ПРОВОДНИК ФАЙЛОВ
     if (showOpenFileDialog) {
         val savedFiles = remember(showOpenFileDialog, fileToDelete, showDeleteAllDialog) { viewModel.getSavedFiles() }
         AlertDialog(
@@ -261,7 +297,6 @@ fun MainScreen(viewModel: InventoryViewModel) {
         )
     }
     Column(modifier = Modifier.fillMaxSize()) {
-        // Верхняя половина: Сканер
         Box(modifier = Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
             if (hasCameraPermission) {
                 ScannerPreview(
@@ -275,7 +310,6 @@ fun MainScreen(viewModel: InventoryViewModel) {
             }
         }
 
-        // Нижняя половина: Информация и трехколоночная таблица
         Column(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -323,34 +357,15 @@ fun MainScreen(viewModel: InventoryViewModel) {
             Text(text = "Всего строк: ${state.lines.size}", fontSize = 13.sp, color = Color.Gray)
             Spacer(modifier = Modifier.height(10.dp))
 
-            // ЗАГОЛОВОК ТРЕХКОЛОНОЧНОЙ ТАБЛИЦЫ
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.Start
             ) {
-                Text(
-                    text = "№",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    color = Color.Gray,
-                    modifier = Modifier.width(30.dp)
-                )
-                Text(
-                    text = "Инвентарный №",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    color = Color.Gray,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    text = "Серийный №",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    color = Color.Gray,
-                    modifier = Modifier.weight(1f)
-                )
+                Text(text = "№", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.width(30.dp))
+                Text(text = "Инвентарный №", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.weight(1f))
+                Text(text = "Серийный №", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.weight(1f))
             }
 
             val listState = rememberLazyListState()
@@ -358,65 +373,52 @@ fun MainScreen(viewModel: InventoryViewModel) {
                 if (state.lines.isNotEmpty()) listState.animateScrollToItem(state.lines.size - 1)
             }
 
-            // ИСПРАВЛЕННАЯ ТАБЛИЦА С ГЛУБОКИМ ПАРСИНГОМ СТРОК С ПРИНТЕРА
             LazyColumn(
                 state = listState,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium)
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
             ) {
                 items(state.lines.size) { index ->
                     val line = state.lines[index]
+                    val tokens = line.split("\t").map { it.trim() }
 
-                    // 1. Сначала бьем всю строку по знакам табуляции
-                    val allTokens = line.split("\t").map { it.trim() }.filter { it.isNotEmpty() }
+                    // Новая структура: Поле 1 (0) = Время, Поле 2 (1) = Комментарий, Поле 3 (2) = Код_Часть1, Поле 4 (3) = Код_Часть2
+                    val commentText = tokens.getOrNull(1) ?: ""
+                    val hasComment = commentText.isNotEmpty()
 
-                    var inventoryNum = ""
-                    var serialNum = ""
+                    // Всё, что идет с 3-го поля (индекс 2) до конца строки — это считанные данные кодов
+                    val inventoryNum = tokens.getOrNull(2) ?: ""
+                    val serialNum = tokens.getOrNull(3) ?: ""
 
-                    // 2. Если у нас 3 или более токенов, значит QR-код внутри содержал собственный разделитель
-                    if (allTokens.size >= 3) {
-                        inventoryNum = allTokens.getOrNull(0) ?: ""
-                        serialNum = allTokens.getOrNull(1) ?: ""
+                    val rowBackgroundColor = if (hasComment) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
                     } else {
-                        // 3. Если токена 2, проверяем, нет ли внутри первого токена скрытых переносов строк (\n или \r)
-                        val firstToken = allTokens.getOrNull(0) ?: ""
-                        val subTokens = when {
-                            firstToken.contains("\r\n") -> firstToken.split("\r\n")
-                            firstToken.contains("\n") -> firstToken.split("\n")
-                            else -> emptyList()
-                        }
-
-                        if (subTokens.size >= 2) {
-                            inventoryNum = subTokens.getOrNull(0)?.trim() ?: ""
-                            serialNum = subTokens.getOrNull(1)?.trim() ?: ""
-                        } else {
-                            // Обычный тестовый одиночный код без серийника
-                            inventoryNum = firstToken
-                        }
+                        Color.Transparent
                     }
 
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(rowBackgroundColor, shape = RoundedCornerShape(4.dp))
+                            .combinedClickable(
+                                onClick = { },
+                                onLongClick = {
+                                    selectedLineIndex = index
+                                    commentInput = commentText
+                                    showCommentDialog = true
+                                }
+                            )
+                            .padding(horizontal = 4.dp)
+                    ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "${index + 1}",
-                                fontSize = 13.sp,
-                                color = Color.Gray,
-                                modifier = Modifier.width(30.dp)
-                            )
-                            Text(
-                                text = inventoryNum,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 13.sp,
-                                modifier = Modifier.weight(1f)
-                            )
+                            Text(text = "${index + 1}", fontSize = 13.sp, color = Color.Gray, modifier = Modifier.width(30.dp))
+                            Text(text = inventoryNum, fontWeight = FontWeight.Medium, fontSize = 13.sp, modifier = Modifier.weight(1f))
                             Text(
                                 text = serialNum,
                                 fontWeight = FontWeight.Normal,
@@ -426,13 +428,8 @@ fun MainScreen(viewModel: InventoryViewModel) {
                             )
                         }
 
-                        if (index < state.lines.size - 1) {
-                            Spacer(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(1.dp)
-                                    .background(Color(0x1A000000))
-                            )
+                        if (index < state.lines.size - 1 && !hasComment) {
+                            Spacer(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0x0F000000)))
                         }
                     }
                 }
