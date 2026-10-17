@@ -1,3 +1,4 @@
+// #2.1
 package com.dzh.qrinventory
 
 import android.Manifest
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -75,6 +77,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+// #2.2
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(viewModel: InventoryViewModel) {
@@ -101,6 +104,7 @@ fun MainScreen(viewModel: InventoryViewModel) {
     var showDeleteAllDialog by remember { mutableStateOf(false) }
 
     var showCommentDialog by remember { mutableStateOf(false) }
+    var showLineDeleteConfirmDialog by remember { mutableStateOf(false) }
     var selectedLineIndex by remember { mutableStateOf(-1) }
     var commentInput by remember { mutableStateOf("") }
 
@@ -114,7 +118,6 @@ fun MainScreen(viewModel: InventoryViewModel) {
         }
     }
 
-    // ДИАЛОГ СОЗДАНИЯ
     if (showCreateDialog) {
         AlertDialog(
             onDismissRequest = { showCreateDialog = false },
@@ -131,7 +134,6 @@ fun MainScreen(viewModel: InventoryViewModel) {
         )
     }
 
-    // ДИАЛОГ КРИТИЧЕСКОГО ПОДТВЕРЖДЕНИЯ УДАЛЕНИЯ ВСЕХ ФАЙЛОВ
     if (showDeleteAllDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteAllDialog = false },
@@ -153,7 +155,7 @@ fun MainScreen(viewModel: InventoryViewModel) {
             }
         )
     }
-    // ДИАЛОГ ПЕРЕИМЕНОВАНИЯ ПО КЛИКУ НА ЗАГОЛОВОК
+// #2.3
     if (showRenameDialog) {
         AlertDialog(
             onDismissRequest = { showRenameDialog = false },
@@ -186,7 +188,6 @@ fun MainScreen(viewModel: InventoryViewModel) {
         )
     }
 
-    // ЛАКОНИЧНЫЙ ДИАЛОГ КОММЕНТАРИЯ
     if (showCommentDialog) {
         AlertDialog(
             onDismissRequest = { showCommentDialog = false },
@@ -200,22 +201,58 @@ fun MainScreen(viewModel: InventoryViewModel) {
                 )
             },
             confirmButton = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = {
+                            showCommentDialog = false
+                            showLineDeleteConfirmDialog = true
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(imageVector = Icons.Filled.Delete, contentDescription = "Удалить строку")
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { showCommentDialog = false }) { Text("Отмена", color = Color.Gray) }
+                        TextButton(
+                            onClick = {
+                                showCommentDialog = false
+                                viewModel.addCommentToLine(selectedLineIndex, commentInput)
+                            }
+                        ) {
+                            Text("Сохранить", color = Color(0xFF33BBEE), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            },
+            dismissButton = null
+        )
+    }
+
+    if (showLineDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showLineDeleteConfirmDialog = false },
+            title = { Text(text = "Удалить эту строку?", fontWeight = FontWeight.Bold) },
+            text = { Text(text = "Выбранный код будет навсегда удален из текущей ведомости.") },
+            confirmButton = {
                 TextButton(
                     onClick = {
-                        showCommentDialog = false
-                        viewModel.addCommentToLine(selectedLineIndex, commentInput)
+                        showLineDeleteConfirmDialog = false
+                        viewModel.deleteLineAt(selectedLineIndex)
                     }
                 ) {
-                    Text("Сохранить", color = Color(0xFF33BBEE), fontWeight = FontWeight.Bold)
+                    Text("Удалить", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showCommentDialog = false }) { Text("Отмена", color = Color.Gray) }
+                TextButton(onClick = { showLineDeleteConfirmDialog = false }) { Text("Отмена", color = Color.Gray) }
             }
         )
     }
 
-    // ВНУТРЕННИЙ ПРОВОДНИК ФАЙЛОВ
     if (showOpenFileDialog) {
         val savedFiles = remember(showOpenFileDialog, fileToDelete, showDeleteAllDialog) { viewModel.getSavedFiles() }
         AlertDialog(
@@ -270,17 +307,13 @@ fun MainScreen(viewModel: InventoryViewModel) {
                     } else {
                         Spacer(modifier = Modifier.width(1.dp))
                     }
-
-                    TextButton(onClick = { showOpenFileDialog = false }) {
-                        Text("Закрыть", color = Color.Gray)
-                    }
+                    TextButton(onClick = { showOpenFileDialog = false }) { Text("Закрыть", color = Color.Gray) }
                 }
             },
             dismissButton = null
         )
     }
 
-    // ДИАЛОГ ПОДТВЕРЖДЕНИЯ УДАЛЕНИЯ ОДНОГО ФАЙЛА
     fileToDelete?.let { file ->
         AlertDialog(
             onDismissRequest = { fileToDelete = null },
@@ -296,150 +329,148 @@ fun MainScreen(viewModel: InventoryViewModel) {
             }
         )
     }
+
+// #2.4
     Column(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.weight(1f).fillMaxWidth().background(Color.Black)) {
+        Box(
+            modifier = Modifier
+                .weight(0.7f)
+                .fillMaxWidth()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
             if (hasCameraPermission) {
                 ScannerPreview(
                     modifier = Modifier.fillMaxSize(),
                     torchOn = torchOn,
                     onTorchToggle = { torchOn = it },
+                    onCreateNewClick = { showCreateDialog = true },
+                    onOpenFileClick = { showOpenFileDialog = true },
+                    onShareClick = { viewModel.shareCurrentFile() },
                     onScan = { viewModel.onScan(it) }
                 )
             } else {
                 Text(text = "Требуется разрешение на камеру", color = Color.White, modifier = Modifier.align(Alignment.Center))
             }
-        }
-
-        Column(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable {
-                            newFileNameInput = state.fileName?.removeSuffix(".tsv") ?: ""
-                            showRenameDialog = true
-                        },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = state.fileName ?: "Нет открытого файла",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(
-                        imageVector = Icons.Filled.Edit,
-                        contentDescription = "Переименовать",
-                        tint = Color.Gray,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-
-                IconButton(
-                    onClick = { viewModel.shareCurrentFile() },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Share,
-                        contentDescription = "Поделиться",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            Text(text = "Всего строк: ${state.lines.size}", fontSize = 13.sp, color = Color.Gray)
-            Spacer(modifier = Modifier.height(10.dp))
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.Start
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clickable {
+                        newFileNameInput = state.fileName?.removeSuffix(".tsv") ?: ""
+                        showRenameDialog = true
+                    },
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "№", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.width(30.dp))
-                Text(text = "Инвентарный №", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.weight(1f))
-                Text(text = "Серийный №", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.weight(1f))
+                Text(
+                    text = state.fileName ?: "Нет открытого файла",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Icon(
+                    imageVector = Icons.Filled.Edit,
+                    contentDescription = "Переименовать",
+                    tint = Color.LightGray,
+                    modifier = Modifier.size(13.dp)
+                )
             }
+        }
 
-            val listState = rememberLazyListState()
-            LaunchedEffect(state.lines.size) {
-                if (state.lines.isNotEmpty()) listState.animateScrollToItem(state.lines.size - 1)
-            }
-
-            LazyColumn(
-                state = listState,
+        Column(modifier = Modifier.weight(1.3f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium)
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .padding(4.dp)
             ) {
-                items(state.lines.size) { index ->
-                    val line = state.lines[index]
-                    val tokens = line.split("\t").map { it.trim() }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    Text(text = "№", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.width(30.dp))
+                    Text(text = "Инвентарный №", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.weight(1f))
+                    Text(text = "Серийный №", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Gray, modifier = Modifier.weight(1f))
+                }
 
-                    // Новая структура: Поле 1 (0) = Время, Поле 2 (1) = Комментарий, Поле 3 (2) = Код_Часть1, Поле 4 (3) = Код_Часть2
-                    val commentText = tokens.getOrNull(1) ?: ""
-                    val hasComment = commentText.isNotEmpty()
+                val listState = rememberLazyListState()
+                LaunchedEffect(state.lines.size) {
+                    if (state.lines.isNotEmpty()) listState.animateScrollToItem(state.lines.size - 1)
+                }
 
-                    // Всё, что идет с 3-го поля (индекс 2) до конца строки — это считанные данные кодов
-                    val inventoryNum = tokens.getOrNull(2) ?: ""
-                    val serialNum = tokens.getOrNull(3) ?: ""
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(state.lines.size) { index ->
+                        val line = state.lines[index]
+                        val tokens = line.split("\t").map { it.trim() }
 
-                    val rowBackgroundColor = if (hasComment) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                    } else {
-                        Color.Transparent
-                    }
+                        val commentText = tokens.getOrNull(1) ?: ""
+                        val hasComment = commentText.isNotEmpty()
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(rowBackgroundColor, shape = RoundedCornerShape(4.dp))
-                            .combinedClickable(
-                                onClick = { },
-                                onLongClick = {
-                                    selectedLineIndex = index
-                                    commentInput = commentText
-                                    showCommentDialog = true
-                                }
-                            )
-                            .padding(horizontal = 4.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(text = "${index + 1}", fontSize = 13.sp, color = Color.Gray, modifier = Modifier.width(30.dp))
-                            Text(text = inventoryNum, fontWeight = FontWeight.Medium, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                            Text(
-                                text = serialNum,
-                                fontWeight = FontWeight.Normal,
-                                fontSize = 13.sp,
-                                color = if (serialNum.isNotEmpty()) MaterialTheme.colorScheme.onSurface else Color.Gray,
-                                modifier = Modifier.weight(1f)
-                            )
+                        val inventoryNum = tokens.getOrNull(2) ?: ""
+                        val serialNum = tokens.getOrNull(3) ?: ""
+
+                        val rowBackgroundColor = if (hasComment) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                        } else {
+                            Color.Transparent
                         }
 
-                        if (index < state.lines.size - 1 && !hasComment) {
-                            Spacer(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0x0F000000)))
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(rowBackgroundColor, shape = RoundedCornerShape(4.dp))
+                                .combinedClickable(
+                                    onClick = { },
+                                    onLongClick = {
+                                        selectedLineIndex = index
+                                        commentInput = commentText
+                                        showCommentDialog = true
+                                    }
+                                )
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "${index + 1}", fontSize = 13.sp, color = Color.Gray, modifier = Modifier.width(30.dp))
+                                Text(text = inventoryNum, fontWeight = FontWeight.Medium, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                                Text(
+                                    text = serialNum,
+                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 13.sp,
+                                    color = if (serialNum.isNotEmpty()) MaterialTheme.colorScheme.onSurface else Color.Gray,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            if (index < state.lines.size - 1 && !hasComment) {
+                                Spacer(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0x0F000000)))
+                            }
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = { showCreateDialog = true }, modifier = Modifier.weight(1f)) { Text("Новый") }
-                Button(onClick = { showOpenFileDialog = true }, modifier = Modifier.weight(1f)) { Text("Открыть") }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(text = "Всего строк: ${state.lines.size}", fontSize = 13.sp, color = Color.Gray)
             }
         }
     }

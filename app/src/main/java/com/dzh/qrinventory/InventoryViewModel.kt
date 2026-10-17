@@ -1,3 +1,4 @@
+// #1.1
 package com.dzh.qrinventory
 
 import android.app.Application
@@ -81,6 +82,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             _state.updateMessage("Создана ведомость: $name")
         }
     }
+    // #1.2
     private val scanHistoryMap = mutableMapOf<String, Long>()
 
     fun onScan(raw: String) {
@@ -93,13 +95,11 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         if (scanHistoryMap.containsKey(code)) return
         scanHistoryMap[code] = now
 
-        // Извлекаем первый токен из кода для проверки на дубликаты
         val incomingSubParts = code.split("\t", "\n", "\r").map { it.trim() }.filter { it.isNotEmpty() }
         val incomingInventoryNum = incomingSubParts.getOrNull(0) ?: ""
 
         val codeExists = _state.value.lines.any { line ->
             val tokens = line.split("\t").map { it.trim() }
-            // В новой структуре считанный код НАЧИНАЕТСЯ с 3-го элемента (индекс 2)
             if (tokens.size >= 3) {
                 val existingInventoryNum = tokens[2]
                 existingInventoryNum == incomingInventoryNum
@@ -113,7 +113,6 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
 
         val stamp = DateFormat.format("yyyy-MM-dd HH:mm:ss", Date(now)).toString()
-        // Структура строки при создании: Время \t [ПустойКоммент] \t СчитанныеДанныеQR
         val line = "$stamp\t\t$code"
         val filePath = _state.value.filePath ?: return
 
@@ -127,9 +126,6 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /**
-     * Изменено: Комментарий всегда вставляется строго во второе поле (индекс 1)
-     */
     fun addCommentToLine(index: Int, comment: String) {
         val filePath = _state.value.filePath ?: return
         val currentLines = _state.value.lines.toMutableList()
@@ -140,13 +136,9 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
         val stamp = tokens[0]
         val cleanedComment = comment.trim().replace("\n", " ").replace("\t", " ")
-
-        // Забираем всё, что шло после поля комментария (начиная со 2-го индекса)
         val qrDataAndRemainder = tokens.subList(2, tokens.size).joinToString("\t")
 
-        // Пересобираем: Время \t Комментарий \t Данные_С_Кода
         val newLine = "$stamp\t$cleanedComment\t$qrDataAndRemainder"
-
         currentLines[index] = newLine
         _state.update { it.copy(lines = currentLines) }
 
@@ -158,6 +150,25 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             }
             _state.updateMessage("Комментарий сохранен")
+        }
+    }
+
+    fun deleteLineAt(index: Int) {
+        val filePath = _state.value.filePath ?: return
+        val currentLines = _state.value.lines.toMutableList()
+        if (index in currentLines.indices) {
+            currentLines.removeAt(index)
+            _state.update { it.copy(lines = currentLines) }
+
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching {
+                    fileWriteMutex.withLock {
+                        val file = File(filePath)
+                        file.writeText(currentLines.joinToString("\n") + if (currentLines.isEmpty()) "" else "\n")
+                    }
+                }
+                _state.updateMessage("Строка удалена")
+            }
         }
     }
 

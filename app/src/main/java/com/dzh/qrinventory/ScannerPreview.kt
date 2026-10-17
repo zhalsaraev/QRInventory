@@ -1,5 +1,5 @@
+// #3.1
 package com.dzh.qrinventory
-
 
 import android.graphics.Bitmap
 import android.graphics.Matrix
@@ -17,17 +17,24 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -72,7 +79,7 @@ private fun scanBarcode(
 
     val size = (rotatedBitmap.width * 0.6f).toInt()
     val x = (rotatedBitmap.width - size) / 2
-    val y = (rotatedBitmap.height - size) / 2
+    val y = ((rotatedBitmap.height - size) / 2) + (rotatedBitmap.height * 0.05f).toInt()
 
     if (size > 0 && x >= 0 && y >= 0 && x + size <= rotatedBitmap.width && y + size <= rotatedBitmap.height) {
         val croppedBitmap = Bitmap.createBitmap(rotatedBitmap, x, y, size, size)
@@ -94,11 +101,16 @@ private fun scanBarcode(
         imageProxy.close()
     }
 }
+
+// #3.2
 @Composable
 fun ScannerPreview(
     modifier: Modifier = Modifier,
     torchOn: Boolean,
     onTorchToggle: (Boolean) -> Unit,
+    onCreateNewClick: () -> Unit,
+    onOpenFileClick: () -> Unit,
+    onShareClick: () -> Unit,
     onScan: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -107,16 +119,14 @@ fun ScannerPreview(
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
 
-    // ИНИЦИАЛИЗАЦИЯ СКАНЕРА: Включаем поддержку ВСЕХ существующих форматов кодов
-    // ИНИЦИАЛИЗАЦИЯ СКАНЕРА: Жестко ограничиваем форматы, чтобы убрать галлюцинации
     val barcodeScanner = remember {
         val options = BarcodeScannerOptions.Builder()
             .setBarcodeFormats(
-                Barcode.FORMAT_QR_CODE,     // Для ваших двумерных наклеек Aquarius/Infinix
-                Barcode.FORMAT_EAN_13,      // Стандартный штрихкод на коробках гаджетов
-                Barcode.FORMAT_EAN_8,       // Компактный штрихкод
-                Barcode.FORMAT_CODE_128,    // Длинные серийные штрихкоды с буквами
-                Barcode.FORMAT_CODE_39      // Стандартные заводские штрихкоды техники
+                Barcode.FORMAT_QR_CODE,
+                Barcode.FORMAT_EAN_13,
+                Barcode.FORMAT_EAN_8,
+                Barcode.FORMAT_CODE_128,
+                Barcode.FORMAT_CODE_39
             )
             .build()
         BarcodeScanning.getClient(options)
@@ -160,18 +170,20 @@ fun ScannerPreview(
     }
 
     BoxWithConstraints(
-        modifier = modifier.pointerInput(camera, previewView) {
-            detectTapGestures { tapOffset ->
-                val camControl = camera?.cameraControl ?: return@detectTapGestures
-                val pView = previewView ?: return@detectTapGestures
-                val factory = pView.meteringPointFactory
-                val point = factory.createPoint(tapOffset.x, tapOffset.y)
-                val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
-                    .setAutoCancelDuration(4, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
-                camControl.startFocusAndMetering(action)
+        modifier = modifier
+            .clipToBounds()
+            .pointerInput(camera, previewView) {
+                detectTapGestures { tapOffset ->
+                    val camControl = camera?.cameraControl ?: return@detectTapGestures
+                    val pView = previewView ?: return@detectTapGestures
+                    val factory = pView.meteringPointFactory
+                    val point = factory.createPoint(tapOffset.x, tapOffset.y)
+                    val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
+                        .setAutoCancelDuration(4, java.util.concurrent.TimeUnit.SECONDS)
+                        .build()
+                    camControl.startFocusAndMetering(action)
+                }
             }
-        }
     ) {
         val boxWidth = maxWidth * 0.6f
 
@@ -195,28 +207,62 @@ fun ScannerPreview(
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
+                .offset(y = 18.dp)
                 .size(boxWidth)
                 .border(BorderStroke(2.dp, Color(0xFF33BBEE)), shape = RoundedCornerShape(12.dp))
                 .background(Color(0x1A000000), shape = RoundedCornerShape(12.dp))
         )
 
-        IconButton(
-            onClick = { onTorchToggle(!torchOn) },
-            colors = IconButtonDefaults.iconButtonColors(
-                containerColor = Color(0x66000000),
-                contentColor = if (torchOn) Color(0xFF33BBEE) else Color.White
-            ),
+        // ПРАВАЯ СТОРОНА: Только кнопка фонарика (высокий контраст, защита от случайных нажатий)
+        Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()
                 .padding(16.dp)
-                .size(48.dp)
         ) {
-            Icon(
-                imageVector = Icons.Filled.FlashOn,
-                contentDescription = "Фонарик",
-                modifier = Modifier.size(24.dp)
-            )
+            IconButton(
+                onClick = { onTorchToggle(!torchOn) },
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = Color(0x66000000),
+                    contentColor = if (torchOn) Color(0xFF33BBEE) else Color.White
+                ),
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(imageVector = Icons.Filled.FlashOn, contentDescription = "Фонарик", modifier = Modifier.size(24.dp))
+            }
+        }
+
+        // ЛЕВАЯ СТОРОНА: Три кнопки управления файлами в один свободный вертикальный ряд
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            IconButton(
+                onClick = onCreateNewClick,
+                colors = IconButtonDefaults.iconButtonColors(containerColor = Color(0x66000000), contentColor = Color.White),
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(imageVector = Icons.Filled.NoteAdd, contentDescription = "Новый", modifier = Modifier.size(24.dp))
+            }
+
+            IconButton(
+                onClick = onOpenFileClick,
+                colors = IconButtonDefaults.iconButtonColors(containerColor = Color(0x66000000), contentColor = Color.White),
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(imageVector = Icons.Filled.FolderOpen, contentDescription = "Открыть", modifier = Modifier.size(24.dp))
+            }
+
+            IconButton(
+                onClick = onShareClick,
+                colors = IconButtonDefaults.iconButtonColors(containerColor = Color(0x66000000), contentColor = Color.White),
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(imageVector = Icons.Filled.Share, contentDescription = "Поделиться", modifier = Modifier.size(24.dp))
+            }
         }
     }
 }
