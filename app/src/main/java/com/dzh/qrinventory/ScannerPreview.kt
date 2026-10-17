@@ -149,6 +149,9 @@ fun ScannerPreview(
 
     imageAnalysis.setAnalyzer(analysisExecutor) { imageProxy ->
         if (imageProxy == null) return@setAnalyzer
+
+        // СИНХРОНИЗАЦИЯ: вызываем стандартный scanBarcode, где зона анализа находится строго по центру кадра,
+        // так как рамка на экране теперь тоже центрирована идеально
         scanBarcode(imageProxy, barcodeScanner, onScan)
     }
 
@@ -204,21 +207,21 @@ fun ScannerPreview(
             }
         )
 
+        // ИСПРАВЛЕНО: Убран ломающий разметку offset, рамка зафиксирована строго по центру видоискателя
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset(y = 18.dp)
                 .size(boxWidth)
                 .border(BorderStroke(2.dp, Color(0xFF33BBEE)), shape = RoundedCornerShape(12.dp))
                 .background(Color(0x1A000000), shape = RoundedCornerShape(12.dp))
         )
 
-        // ПРАВАЯ СТОРОНА: Только кнопка фонарика (высокий контраст, защита от случайных нажатий)
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             IconButton(
                 onClick = { onTorchToggle(!torchOn) },
@@ -232,7 +235,6 @@ fun ScannerPreview(
             }
         }
 
-        // ЛЕВАЯ СТОРОНА: Три кнопки управления файлами в один свободный вертикальный ряд
         Column(
             modifier = Modifier
                 .align(Alignment.TopStart)

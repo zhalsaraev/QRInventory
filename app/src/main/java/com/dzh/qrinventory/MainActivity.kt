@@ -332,9 +332,10 @@ fun MainScreen(viewModel: InventoryViewModel) {
 
 // #2.4
     Column(modifier = Modifier.fillMaxSize()) {
+        // Камера получила компактный вес 0.8f (не загромождает интерфейс)
         Box(
             modifier = Modifier
-                .weight(0.7f)
+                .weight(0.8f)
                 .fillMaxWidth()
                 .background(Color.Black),
             contentAlignment = Alignment.Center
@@ -352,36 +353,11 @@ fun MainScreen(viewModel: InventoryViewModel) {
             } else {
                 Text(text = "Требуется разрешение на камеру", color = Color.White, modifier = Modifier.align(Alignment.Center))
             }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clickable {
-                        newFileNameInput = state.fileName?.removeSuffix(".tsv") ?: ""
-                        showRenameDialog = true
-                    },
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = state.fileName ?: "Нет открытого файла",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Icon(
-                    imageVector = Icons.Filled.Edit,
-                    contentDescription = "Переименовать",
-                    tint = Color.LightGray,
-                    modifier = Modifier.size(13.dp)
-                )
-            }
         }
 
-        Column(modifier = Modifier.weight(1.3f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        // Информационная панель получила вес 1.2f (больше места под таблицу позиций)
+        Column(modifier = Modifier.weight(1.2f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -389,6 +365,34 @@ fun MainScreen(viewModel: InventoryViewModel) {
                     .background(MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium)
                     .padding(4.dp)
             ) {
+                // Название ведомости расположено на самом верху бежевой плашки
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                        .clickable {
+                            newFileNameInput = state.fileName?.removeSuffix(".tsv") ?: ""
+                            showRenameDialog = true
+                        },
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = state.fileName ?: "Нет открытого файла",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.Filled.Edit,
+                        contentDescription = "Переименовать",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+
+                // Заголовки столбцов ведомости
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
