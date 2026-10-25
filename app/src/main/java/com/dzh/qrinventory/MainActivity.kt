@@ -111,6 +111,10 @@ fun MainScreen(viewModel: InventoryViewModel) {
     var fileToDelete by remember { mutableStateOf<File?>(null) }
     var newFileNameInput by remember { mutableStateOf("") }
 
+    LaunchedEffect(Unit) {
+        torchOn = false
+    }
+
     LaunchedEffect(state.message) {
         state.message?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()

@@ -49,11 +49,11 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun restoreOrCreateTodaySession() {
         viewModelScope.launch(Dispatchers.IO) {
-            val todayStr = DateFormat.format("yyyy-MM-dd", Date()).toString()
             val allFiles = filesDir.listFiles()
 
+            // Ищем абсолютно любой .tsv файл во всей директории, у которого дата последнего изменения самая свежая
             val mostRecentFile = allFiles?.filter {
-                it.name.startsWith("inventory_$todayStr") && it.name.endsWith(".tsv")
+                it.name.endsWith(".tsv")
             }?.maxByOrNull { it.lastModified() }
 
             if (mostRecentFile != null) {
@@ -72,6 +72,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+
     fun createNew() {
         viewModelScope.launch(Dispatchers.IO) {
             val name = "inventory_" + DateFormat.format("yyyy-MM-dd_HH-mm-ss", Date()) + ".tsv"
@@ -82,6 +83,7 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
             _state.updateMessage("Создана ведомость: $name")
         }
     }
+
     // #1.2
     private val scanHistoryMap = mutableMapOf<String, Long>()
 
@@ -216,7 +218,8 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun getSavedFiles(): List<File> {
-        return filesDir.listFiles()?.filter { it.name.endsWith(".tsv") }?.sortedByDescending { it.lastModified() } ?: emptyList()
+        return filesDir.listFiles()?.filter { it.name.endsWith(".tsv") }?.sortedByDescending { it.lastModified() }
+            ?: emptyList()
     }
 
     fun deleteFile(file: File) {
@@ -248,14 +251,22 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
     fun loadFromUri(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
             val text = try {
-                getApplication<Application>().contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() }
-            } catch (e: Exception) { null } ?: return@launch
+                getApplication<Application>().contentResolver.openInputStream(uri)
+                    ?.use { it.bufferedReader().readText() }
+            } catch (e: Exception) {
+                null
+            } ?: return@launch
             val lines = text.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
             var name = if (uri.scheme == "file") File(uri.path ?: "").name else "file.tsv"
 
             if (uri.scheme == "content") {
                 runCatching {
-                    getApplication<Application>().contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null)?.use { c ->
+                    getApplication<Application>().contentResolver.query(
+                        uri,
+                        arrayOf(OpenableColumns.DISPLAY_NAME),
+                        null,
+                        null
+                    )?.use { c ->
                         val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                         if (idx >= 0 && c.moveToFirst()) name = c.getString(idx)
                     }
@@ -279,8 +290,12 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
     private fun beep(isError: Boolean = false) {
         try {
             val tg = tone ?: ToneGenerator(AudioManager.STREAM_MUSIC, 85).also { tone = it }
-            if (isError) tg.startTone(ToneGenerator.TONE_CDMA_DIAL_TONE_LITE, 350) else tg.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
-        } catch (_: Exception) {}
+            if (isError) tg.startTone(
+                ToneGenerator.TONE_CDMA_DIAL_TONE_LITE,
+                350
+            ) else tg.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
+        } catch (_: Exception) {
+        }
     }
 
     override fun onCleared() {

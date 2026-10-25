@@ -132,12 +132,24 @@ fun ScannerPreview(
         BarcodeScanning.getClient(options)
     }
 
-    DisposableEffect(Unit) {
+    // Отслеживаем сворачивание приложения для сброса кнопки фонарика
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            // Когда приложение уходит в фон (или закрывается камера), сбрасываем кнопку
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                onTorchToggle(false)
+            }
+        }
+        lifecycle.addObserver(observer)
+
         onDispose {
+            lifecycle.removeObserver(observer)
             barcodeScanner.close()
             analysisExecutor.shutdown()
         }
     }
+
 
     val preview = remember { Preview.Builder().build() }
     val imageAnalysis = remember {
@@ -181,7 +193,10 @@ fun ScannerPreview(
                     val pView = previewView ?: return@detectTapGestures
                     val factory = pView.meteringPointFactory
                     val point = factory.createPoint(tapOffset.x, tapOffset.y)
-                    val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
+                    val action = FocusMeteringAction.Builder(
+                        point,
+                        FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE
+                    )
                         .setAutoCancelDuration(4, java.util.concurrent.TimeUnit.SECONDS)
                         .build()
                     camControl.startFocusAndMetering(action)
