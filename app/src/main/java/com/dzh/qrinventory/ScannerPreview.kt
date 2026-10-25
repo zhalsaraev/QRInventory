@@ -58,6 +58,11 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+
 
 @androidx.annotation.OptIn(ExperimentalGetImage::class)
 private fun scanBarcode(
@@ -169,6 +174,15 @@ fun ScannerPreview(
 
     var camera by remember { mutableStateOf<Camera?>(null) }
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
+    var currentZoom by remember { mutableStateOf(1f) }
+
+    LaunchedEffect(camera) {
+        camera?.cameraInfo?.zoomState?.observe(lifecycleOwner) { state ->
+            if (state != null) {
+                currentZoom = state.zoomRatio
+            }
+        }
+    }
 
     LaunchedEffect(cameraProviderFuture) {
         val provider = try { cameraProviderFuture.get() } catch (e: Exception) { null } ?: return@LaunchedEffect
@@ -187,16 +201,27 @@ fun ScannerPreview(
     BoxWithConstraints(
         modifier = modifier
             .clipToBounds()
+
+            .pointerInput(camera) {
+                detectTransformGestures(panZoomLock = true) { _, _, zoom, _ ->
+                    val cam = camera ?: return@detectTransformGestures
+                    val zoomState = cam.cameraInfo.zoomState.value ?: return@detectTransformGestures
+
+                    // Вычисляем новый зум на основе текущего масштаба камеры
+                    val minZoom = zoomState.minZoomRatio
+                    val maxZoom = zoomState.maxZoomRatio
+                    val newZoomRatio = (zoomState.zoomRatio * zoom).coerceIn(minZoom, maxZoom)
+
+                    cam.cameraControl.setZoomRatio(newZoomRatio)
+                }
+            }
             .pointerInput(camera, previewView) {
                 detectTapGestures { tapOffset ->
                     val camControl = camera?.cameraControl ?: return@detectTapGestures
                     val pView = previewView ?: return@detectTapGestures
                     val factory = pView.meteringPointFactory
                     val point = factory.createPoint(tapOffset.x, tapOffset.y)
-                    val action = FocusMeteringAction.Builder(
-                        point,
-                        FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE
-                    )
+                    val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
                         .setAutoCancelDuration(4, java.util.concurrent.TimeUnit.SECONDS)
                         .build()
                     camControl.startFocusAndMetering(action)
@@ -222,7 +247,6 @@ fun ScannerPreview(
             }
         )
 
-        // ИСПРАВЛЕНО: Убран ломающий разметку offset, рамка зафиксирована строго по центру видоискателя
         Box(
             modifier = Modifier
                 .align(Alignment.Center)
@@ -230,6 +254,24 @@ fun ScannerPreview(
                 .border(BorderStroke(2.dp, Color(0xFF33BBEE)), shape = RoundedCornerShape(12.dp))
                 .background(Color(0x1A000000), shape = RoundedCornerShape(12.dp))
         )
+        if (currentZoom > 1.01f) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    // Смещаем текст чуть ниже центральной рамки сканера, чтобы он не перекрывал прицел
+                    .offset(y = (boxWidth / 2) + 24.dp)
+                    .background(Color(0x99000000), shape = RoundedCornerShape(16.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    // Форматируем до одной десятой, например "2.4x"
+                    text = String.format(java.util.Locale.US, "%.1fx", currentZoom),
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
 
         Column(
             modifier = Modifier
