@@ -1,4 +1,3 @@
-// #3.1
 package com.dzh.qrinventory
 
 import android.graphics.Bitmap
@@ -26,8 +25,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -107,7 +104,6 @@ private fun scanBarcode(
     }
 }
 
-// #3.2
 @Composable
 fun ScannerPreview(
     modifier: Modifier = Modifier,
@@ -137,7 +133,6 @@ fun ScannerPreview(
         BarcodeScanning.getClient(options)
     }
 
-    // Отслеживаем сворачивание приложения для сброса кнопки фонарика
     val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
@@ -167,8 +162,6 @@ fun ScannerPreview(
     imageAnalysis.setAnalyzer(analysisExecutor) { imageProxy ->
         if (imageProxy == null) return@setAnalyzer
 
-        // СИНХРОНИЗАЦИЯ: вызываем стандартный scanBarcode, где зона анализа находится строго по центру кадра,
-        // так как рамка на экране теперь тоже центрирована идеально
         scanBarcode(imageProxy, barcodeScanner, onScan)
     }
 

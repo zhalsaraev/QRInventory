@@ -1,4 +1,3 @@
-// #2.1
 package com.dzh.qrinventory
 
 import android.Manifest
@@ -33,9 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -77,7 +74,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-// #2.2
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(viewModel: InventoryViewModel) {
@@ -159,7 +156,7 @@ fun MainScreen(viewModel: InventoryViewModel) {
             }
         )
     }
-// #2.3
+
     if (showRenameDialog) {
         AlertDialog(
             onDismissRequest = { showRenameDialog = false },
@@ -334,9 +331,7 @@ fun MainScreen(viewModel: InventoryViewModel) {
         )
     }
 
-// #2.4
     Column(modifier = Modifier.fillMaxSize()) {
-        // Камера получила компактный вес 0.8f (не загромождает интерфейс)
         Box(
             modifier = Modifier
                 .weight(0.8f)
@@ -359,7 +354,6 @@ fun MainScreen(viewModel: InventoryViewModel) {
             }
         }
 
-        // Информационная панель получила вес 1.2f (больше места под таблицу позиций)
         Column(modifier = Modifier.weight(1.2f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
 
             Column(
@@ -369,7 +363,6 @@ fun MainScreen(viewModel: InventoryViewModel) {
                     .background(MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium)
                     .padding(4.dp)
             ) {
-                // Название ведомости расположено на самом верху бежевой плашки
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -396,7 +389,6 @@ fun MainScreen(viewModel: InventoryViewModel) {
                     )
                 }
 
-                // Заголовки столбцов ведомости
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

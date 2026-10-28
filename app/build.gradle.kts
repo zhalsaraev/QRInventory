@@ -13,17 +13,16 @@ android {
         applicationId = "com.dzh.qrinventory"
         minSdk = 29
         targetSdk = 37
-        versionCode = 8
-        versionName = "0.9.0"
+        versionCode = 9
+        versionName = "0.9.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            // ОТКЛЮЧАЕМ СЖАТИЕ: Это уберет вылеты из-за оптимизации нативных библиотек Google и CameraX
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
 
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

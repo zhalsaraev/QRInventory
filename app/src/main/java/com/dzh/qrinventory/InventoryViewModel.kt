@@ -1,4 +1,3 @@
-// #1.1
 package com.dzh.qrinventory
 
 import android.app.Application
@@ -51,7 +50,6 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch(Dispatchers.IO) {
             val allFiles = filesDir.listFiles()
 
-            // Ищем абсолютно любой .tsv файл во всей директории, у которого дата последнего изменения самая свежая
             val mostRecentFile = allFiles?.filter {
                 it.name.endsWith(".tsv")
             }?.maxByOrNull { it.lastModified() }
@@ -84,7 +82,6 @@ class InventoryViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    // #1.2
     private val scanHistoryMap = mutableMapOf<String, Long>()
 
     fun onScan(raw: String) {
